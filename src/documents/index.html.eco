@@ -1,0 +1,20 @@
+---
+title: "Welcome"
+layout: default
+isPage: true
+---
+<h2>Welcome</h2>
+<p>
+I'm a dedicated hard working guy with a burning passion for programming. If you want to know more about me or need to get in touch with me go check out the <a href="/about.html">about section</a>.
+</p>
+
+<h2>Blog</h2>
+<ul class="recent">
+	<% for post in @getCollection("posts").toJSON(): %>
+	<% console.log("post") %>
+		<li>
+			<h3><a href="<%= post.url %>"><%= post.name %></a> <span class="post-date"><%= @formatDate(post.date, 'MMMM Do YYYY') %></span></h3>
+			<i><%= post.teaser%></i>			
+		</li>
+	<% end %>
+</ul>

@@ -1,0 +1,54 @@
+<html>
+<head>
+    <title><%= @getPreparedTitle() %></title>
+    <%- @getBlock("meta").toHTML() %>
+    <%- @getBlock("styles").add(["/styles/style.css", "/styles/highlights.css", "/styles/bootstrap.css"]).toHTML() %>
+    <%- @getBlock("scripts").add(["/vendor/jquery.js", "/vendor/underscore-min.js","/scripts/script.js"]).toHTML() %>
+</head>
+<body>
+	<div class="container">
+		<nav class="topbar">
+			<div class="topbar-inner">
+				<a class="logo" href="/">ADThomsen</a>
+				<div class="links">
+			    	<% for page in @getCollection("pages").toJSON(): %>
+			    		<a class="<%= if page.id is @document.id then 'active' else 'inactive' %>" href="<%= page.url %>"><%= page.title %></a>
+			    	<% end %>
+			    	<a href="https://github.com/adthomsen" class="inactive">Github</a>
+			    	<a href="https://twitter.com/andantho" class="inactive">Twitter</a>
+			    </div>
+			    <div class="social">
+			    	<a href="https://twitter.com/andantho" class="twitter-follow-button" data-show-count="false" data-show-screen-name="false" data-size="large" data-lang="en"></a>
+			    </div>
+			</div>
+		</nav>
+		<div class="main">
+			<section class="content">
+				<article class="block">
+				    <%- @content %>
+				    <%- @getBlock("scripts").toHTML() %>
+				</article>
+			</section>
+		</div>
+		<footer class="bottombar">
+			<div class="bottombar-inner">
+				This site is created with <a href="http://docpad.org" target="_blank">DocPad</a>.
+			</div>
+		</footer>
+	</div>
+	<script type="text/javascript">
+
+	  var _gaq = _gaq || [];
+	  _gaq.push(['_setAccount', 'UA-41939051-1']);
+	  _gaq.push(['_trackPageview']);
+
+	  (function() {
+	    var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+	    ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+	    var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+	  })();
+
+	</script>
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0];if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src="//platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");</script>
+</body>
+</html>
