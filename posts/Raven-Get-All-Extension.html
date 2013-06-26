@@ -1,0 +1,200 @@
+<html>
+<head>
+    <title>ADThomsen</title>
+    <meta http-equiv="X-Powered-By" content="DocPad v6.38.1"/>
+    <link  rel="stylesheet" href="/styles/style.css" /><link  rel="stylesheet" href="/styles/highlights.css" /><link  rel="stylesheet" href="/styles/bootstrap.css" />
+    <script defer="defer"  src="/vendor/jquery.js"></script><script defer="defer"  src="/vendor/underscore-min.js"></script><script defer="defer"  src="/scripts/script.js"></script>
+</head>
+<body>
+	<div class="container">
+		<nav class="topbar">
+			<div class="topbar-inner">
+				<a class="logo" href="/">ADThomsen</a>
+				<div class="links">
+			    	
+			    		<a class="inactive" href="/posts.html">Archive</a>
+			    	
+			    		<a class="inactive" href="/about.html">About</a>
+			    	
+			    	<a href="https://github.com/adthomsen" class="inactive">Github</a>
+			    	<a href="https://twitter.com/andantho" class="inactive">Twitter</a>
+			    </div>
+			</div>
+		</nav>
+		<div class="main">
+			<section class="content">
+				<article class="block">
+				    <div class="post-wrapper">
+	<h1>A RavenDb Extension Method To Get All Documents</h1>
+	<aside>An extension method for getting all documents from a RavenDb without changing the configuration</aside>
+	<strong class="small">June 26th 2013</strong>
+	<div class="post">
+		<p><a href="https://gist.github.com/ADThomsen/5840375" class="btn btn-inverse" target="_blank">Gist with the code from this post</a></p>
+<p>Getting all documents of a type in RavenDb can be tricky. <a href="http://ravendb.net/docs/intro/safe-by-default">RavenDb is Safe By Default</a> which means that by default only 128 documents are fetched from the document store if you don&#39;t specify a number yourself. That would be done by using the <code>.Take()</code> method. But even then the maximum number of results is limited to 1024.</p>
+<p>The RavenDb documentation referenced above states that <quote>&quot;As a rule of thumb, whenever you are trying to get more than 128 documents in one go, definitely more than 1,024, you are doing something wrong&quot;.</quote> That might be a valid point when talking about how much data you should fetch and feed to a user on a web page in one go. But there are also cases where you might indeed need to fetch all your documents without &quot;doing something wrong&quot;.</p>
+<p>Our case is that we do some integration work at night where we need to update all the documents based on external data. We found that the task was easiest to do if we could load all documents of a type in one go. After a quick Google search <a href="http://stackoverflow.com/questions/10048943/proper-way-to-retrieve-more-than-128-documents-with-ravendb">this StackOverflow post</a> came up. Taking another look at the Safe By Default documentation it states that the accepted solution on the SO question is a possibility.</p>
+<p>OK, so now we can change the configuration to return more documents. But what should we set it to then? 5000? Then how about when we get to 5001 documents? And how do we know which number to specify in the <code>.Take()</code>? Do we just use <code>int.MaxValue</code>? I didn&#39;t like this approach so I wrote an extension method to do the work. I based it on the <a href="http://ravendb.net/docs/client-api/querying/paging">RavenDb paging documentation</a>. It looks like this.</p>
+<pre class="highlighted"><code class="cs"><span class="keyword">public</span> <span class="keyword">static</span> List&lt;T&gt; GetAll&lt;T&gt;(<span class="keyword">this</span> IDocumentSession session)
+{
+    <span class="keyword">const</span> <span class="keyword">int</span> size = <span class="number">1024</span>;
+    <span class="keyword">int</span> page = <span class="number">0</span>;
+
+    RavenQueryStatistics stats;
+    List&lt;T&gt; objects = session.Query&lt;T&gt;()
+                          .Statistics(<span class="keyword">out</span> stats)
+                          .Skip(page * size)
+                          .Take(size)
+                          .ToList();
+
+    page++;
+
+    <span class="keyword">while</span> ((page * size) &lt;= stats.TotalResults)
+    {
+        objects.AddRange(session.Query&lt;T&gt;()
+                     .Skip(page * size)
+                     .Take(size)
+                     .ToList());
+        page++;
+    }
+
+    <span class="keyword">return</span> objects;
+}</code></pre>
+<p>This worked out great and for the amount of documents we had it also performed well. However it soon became insufficient. Next thing you know we need to get all documents of a type based on an expression. Unfortunately this time we couldn&#39;t make use of <code>RavenQueryStatistics</code> because it always returns the count of all documents in the database and not just the ones that fit the expression. So I wrote another extension.</p>
+<pre class="highlighted"><code class="avrasm">public static List&lt;T&gt; GetAll&lt;T&gt;(this IDocumentSession session, Expression&lt;Func&lt;T, bool&gt;&gt; expression)
+{
+    // We cant use RavenQueryStatistics here since it always returns total number of documents <span class="keyword">in</span> database
+    // not just the ones that fit our expression
+    int size = <span class="number">1024</span><span class="comment">;</span>
+    int page = <span class="number">0</span><span class="comment">;</span>
+
+    List&lt;T&gt; objects = session<span class="preprocessor">.Query</span>&lt;T&gt;()
+                          <span class="preprocessor">.Where</span>(expression)
+                          <span class="preprocessor">.Skip</span>(page * size)
+                          <span class="preprocessor">.Take</span>(size)
+                          <span class="preprocessor">.ToList</span>()<span class="comment">;</span>
+
+    size = objects<span class="preprocessor">.Count</span><span class="comment">;</span>
+    page++<span class="comment">;</span>
+
+    while (size &gt;= <span class="number">1024</span>)
+    {
+        var result = session<span class="preprocessor">.Query</span>&lt;T&gt;()
+                            <span class="preprocessor">.Where</span>(expression)
+                            <span class="preprocessor">.Skip</span>(page * size)
+                            <span class="preprocessor">.Take</span>(size)
+                            <span class="preprocessor">.ToList</span>()<span class="comment">;</span>
+
+        objects<span class="preprocessor">.AddRange</span>(result)<span class="comment">;</span>
+        size = result<span class="preprocessor">.Count</span><span class="comment">;</span>
+        page++<span class="comment">;</span>
+    }
+
+    return objects<span class="comment">;</span>
+}</code></pre>
+<p>Now we had what we needed.</p>
+<p>And to wrap it all up in an extension class:</p>
+<pre class="highlighted"><code class="cs"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">class</span> DocumentSessionExtensions
+{
+    <span class="keyword">public</span> <span class="keyword">static</span> List&lt;T&gt; GetAll&lt;T&gt;(<span class="keyword">this</span> IDocumentSession session)
+    {
+        <span class="keyword">const</span> <span class="keyword">int</span> size = <span class="number">1024</span>;
+        <span class="keyword">int</span> page = <span class="number">0</span>;
+
+        RavenQueryStatistics stats;
+        List&lt;T&gt; objects = session.Query&lt;T&gt;()
+                              .Statistics(<span class="keyword">out</span> stats)
+                              .Skip(page * size)
+                              .Take(size)
+                              .ToList();
+
+        page++;
+
+        <span class="keyword">while</span> ((page * size) &lt;= stats.TotalResults)
+        {
+            objects.AddRange(session.Query&lt;T&gt;()
+                         .Skip(page * size)
+                         .Take(size)
+                         .ToList());
+            page++;
+        }
+
+        <span class="keyword">return</span> objects;
+    }
+
+    <span class="keyword">public</span> <span class="keyword">static</span> List&lt;T&gt; GetAll&lt;T&gt;(<span class="keyword">this</span> IDocumentSession session, Expression&lt;Func&lt;T, <span class="keyword">bool</span>&gt;&gt; expression)
+    {
+        <span class="comment">// We cant use RavenQueryStatistics here since it always returns total number of documents in database</span>
+        <span class="comment">// not just the ones that fit our expression</span>
+        <span class="keyword">int</span> size = <span class="number">1024</span>;
+        <span class="keyword">int</span> page = <span class="number">0</span>;
+
+        List&lt;T&gt; objects = session.Query&lt;T&gt;()
+                              .Where(expression)
+                              .Skip(page * size)
+                              .Take(size)
+                              .ToList();
+
+        size = objects.Count;
+        page++;
+
+        <span class="keyword">while</span> (size &gt;= <span class="number">1024</span>)
+        {
+            <span class="keyword">var</span> result = session.Query&lt;T&gt;()
+                                .Where(expression)
+                                .Skip(page * size)
+                                .Take(size)
+                                .ToList();
+
+            objects.AddRange(result);
+            size = result.Count;
+            page++;
+        }
+
+        <span class="keyword">return</span> objects;
+    }
+}</code></pre>
+<p>Any and all comments are appreciated - good or bad. As long as they are constructive.</p>
+<p><a href="https://gist.github.com/ADThomsen/5840375" class="btn btn-inverse" target="_blank">Gist with the code from this post</a></p>
+
+	</div>
+	    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        /* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+        var disqus_shortname = 'adthomsen'; // required: replace example with your forum shortname
+
+        /* * * DON'T EDIT BELOW THIS LINE * * */
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+    
+</div>
+				    
+				</article>
+			</section>
+		</div>
+		<footer class="bottombar">
+			<div class="bottombar-inner">
+				This site is created with <a href="http://docpad.org" target="_blank">DocPad</a>.
+			</div>
+		</footer>
+	</div>
+	<script type="text/javascript">
+
+	  var _gaq = _gaq || [];
+	  _gaq.push(['_setAccount', 'UA-41939051-1']);
+	  _gaq.push(['_trackPageview']);
+
+	  (function() {
+	    var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+	    ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+	    var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+	  })();
+
+	</script>
+</body>
+</html>
