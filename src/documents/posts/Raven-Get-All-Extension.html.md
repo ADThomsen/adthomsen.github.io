@@ -1,7 +1,7 @@
 ---
 layout: post
 name: A RavenDb Extension Method To Get All Documents
-date: 2013-06-22
+date: 2013-06-26
 isPost: true
 teaser: An extension method for getting all documents from a RavenDb without changing the configuration
 ---
